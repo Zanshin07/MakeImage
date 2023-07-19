@@ -9,7 +9,7 @@
 		<key>GenerateImageEndpoint</key>
 		<string>/v1/images/generations</string>
 		<key>APIKey</key>
-		<string>your apikey</string>
+		<string>your APIKey</string>
 	</dict>
 </dict>
 </plist>

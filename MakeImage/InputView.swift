@@ -95,7 +95,7 @@ struct URLRequestService {
 
 class GenerateImageViewModel: ObservableObject {
 
-    @Published var imageB64: Data? = nil
+    @Published var imageB64: (Data, Data) = (Data(), Data())
     @Published var canRun = true
     @Published var errorMessage = ""
     
@@ -103,17 +103,25 @@ class GenerateImageViewModel: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     
-    func generate(prompt: String) {
+    func generate(_ prompt1: String, _ prompt2: String) {
         canRun = false
-        urlRequestService.generate(prompt: prompt)
+        var canRunTemp1 = false
+        var canRunTemp2 = false
+        urlRequestService.generate(prompt: prompt1)
             .sink { completion in
                 switch completion {
                 case .finished:
-                    self.canRun = true
+                    canRunTemp1 = true
+                    if canRunTemp1, canRunTemp2 {
+                        self.canRun = true
+                    }
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
                     print(error.localizedDescription)
-                    self.canRun = true
+                    canRunTemp1 = true
+                    if canRunTemp1, canRunTemp2 {
+                        self.canRun = true
+                    }
                 }
             } receiveValue: { openAIImage in
                 print(openAIImage.created)
@@ -121,7 +129,33 @@ class GenerateImageViewModel: ObservableObject {
                       let data = Data(base64Encoded: json) else {
                           return
                       }
-                self.imageB64 = data
+                self.imageB64.0 = data
+                
+            }
+            .store(in: &cancellables)
+        urlRequestService.generate(prompt: prompt2)
+            .sink { completion in
+                switch completion {
+                case .finished:
+                    canRunTemp2 = true
+                    if canRunTemp1, canRunTemp2 {
+                        self.canRun = true
+                    }
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    print(error.localizedDescription)
+                    canRunTemp2 = true
+                    if canRunTemp1, canRunTemp2 {
+                        self.canRun = true
+                    }
+                }
+            } receiveValue: { openAIImage in
+                print(openAIImage.created)
+                guard let json = openAIImage.data.first?.b64JSON,
+                      let data = Data(base64Encoded: json) else {
+                          return
+                      }
+                self.imageB64.1 = data
                 
             }
             .store(in: &cancellables)
@@ -133,7 +167,7 @@ class GenerateImageViewModel: ObservableObject {
 // View
 struct InputView: View {
     @StateObject var viewModel = GenerateImageViewModel()
-    @StateObject var viewModel2 = GenerateImageViewModel()
+
     // 生成画像のプロンプトになる要素
     var inputText: [String] =
         ["food", "ramen", "beaf", "curry","cycling","ship","boat","sushi","cycling","ship","boat","car","baseball pitcher","dunk shoot","spike","soccer","cascade","tower","street","temple","cat","rabbit","bird","dog"]
@@ -144,30 +178,23 @@ struct InputView: View {
         var body: some View {
         VStack(alignment: .leading, spacing: 25) {
             Group {
-                if viewModel.imageB64 != nil {
-                    Image(uiImage: UIImage(data: viewModel.imageB64!) ?? UIImage())
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
+                Image(uiImage: UIImage(data: viewModel.imageB64.0) ?? UIImage())
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                 
-                if viewModel.imageB64 != nil {
-                    Text("+")
-                        .font(.title)
-                }
+                Text("+")
+                    .font(.title)
                 
-                if viewModel2.imageB64 != nil {
-                    Image(uiImage: UIImage(data: viewModel2.imageB64!) ?? UIImage())
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
+                Image(uiImage: UIImage(data: viewModel.imageB64.1) ?? UIImage())
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
             }
             .frame(maxWidth: .infinity)
             .padding()
             
             Button{
                 //1ボタンで　データを２個出力して２枚の画像を出す
-                viewModel.generate(prompt: inputText.randomElement() ?? "dog")
-                viewModel2.generate(prompt: inputText2.randomElement() ?? "dog")
+                viewModel.generate(inputText.randomElement()!, inputText2.randomElement()!)
                 
             } label: {
                 
